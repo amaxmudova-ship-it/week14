@@ -1,0 +1,103 @@
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
+
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class TitlesBrowser extends Application {
+
+    private TableView<AuthorBook> tableView = new TableView<>();
+    private TextField searchField = new TextField();
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    @Override
+    public void start(Stage stage) {
+
+        // Columns
+        TableColumn<AuthorBook, String> firstCol = new TableColumn<>("First Name");
+        firstCol.setCellValueFactory(new PropertyValueFactory<>("firstName"));
+
+        TableColumn<AuthorBook, String> lastCol = new TableColumn<>("Last Name");
+        lastCol.setCellValueFactory(new PropertyValueFactory<>("lastName"));
+
+        TableColumn<AuthorBook, String> isbnCol = new TableColumn<>("ISBN");
+        isbnCol.setCellValueFactory(new PropertyValueFactory<>("isbn"));
+
+        TableColumn<AuthorBook, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+        titleCol.setPrefWidth(230);
+
+        tableView.getColumns().addAll(firstCol, lastCol, isbnCol, titleCol);
+
+        // Search UI
+        searchField.setPromptText("Last-name prefix");
+        Button searchBtn = new Button("Search");
+
+        HBox top = new HBox(10, searchField, searchBtn);
+
+        VBox root = new VBox(10, top, tableView);
+        root.setStyle("-fx-padding: 15;");
+
+        // Load all data at startup
+        loadData("%");
+
+        // Search action
+        searchBtn.setOnAction(e -> {
+            String text = searchField.getText().trim();
+            String pattern = text.isEmpty() ? "%" : text + "%";
+            loadData(pattern);
+        });
+
+        stage.setTitle("TitlesBrowser");
+        stage.setScene(new Scene(root, 640, 400));
+        stage.show();
+    }
+
+    private Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(
+                "jdbc:mysql://localhost:3306/books", "root", ""
+        );
+    }
+
+    private void loadData(String pattern) {
+        List<AuthorBook> list = new ArrayList<>();
+
+        String sql = """
+                SELECT a.FirstName, a.LastName, t.ISBN, t.Title
+                FROM Authors a
+                INNER JOIN AuthorISBN ai ON a.AuthorID = ai.AuthorID
+                INNER JOIN Titles t ON ai.ISBN = t.ISBN
+                WHERE a.LastName LIKE ?
+                ORDER BY a.LastName, a.FirstName
+                """;
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, pattern);
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                list.add(new AuthorBook(
+                        rs.getString("FirstName"),
+                        rs.getString("LastName"),
+                        rs.getString("ISBN"),
+                        rs.getString("Title")
+                ));
+            }
+
+            tableView.getItems().setAll(list);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
