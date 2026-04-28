@@ -1,0 +1,162 @@
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
+
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class AuthorsManager extends Application {
+
+    private TableView<Author> tableView = new TableView<>();
+    private TextField firstNameField = new TextField();
+    private TextField lastNameField = new TextField();
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    @Override
+    public void start(Stage stage) {
+        // Columns
+        TableColumn<Author, Integer> idCol = new TableColumn<>("Author ID");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("authorID"));
+
+        TableColumn<Author, String> firstCol = new TableColumn<>("First Name");
+        firstCol.setCellValueFactory(new PropertyValueFactory<>("firstName"));
+
+        TableColumn<Author, String> lastCol = new TableColumn<>("Last Name");
+        lastCol.setCellValueFactory(new PropertyValueFactory<>("lastName"));
+
+        tableView.getColumns().addAll(idCol, firstCol, lastCol);
+
+        // Buttons
+        Button addBtn = new Button("Add");
+        Button updateBtn = new Button("Update");
+        Button deleteBtn = new Button("Delete");
+
+        // Layout
+        HBox form = new HBox(10, 
+                new Label("First Name:"), firstNameField,
+                new Label("Last Name:"), lastNameField,
+                addBtn, updateBtn, deleteBtn
+        );
+
+        VBox root = new VBox(10, tableView, form);
+        root.setStyle("-fx-padding: 15;");
+
+        // Load data
+        loadAuthors();
+
+        // Button actions
+        addBtn.setOnAction(e -> addAuthor());
+        updateBtn.setOnAction(e -> updateAuthor());
+        deleteBtn.setOnAction(e -> deleteAuthor());
+
+        // Fill fields when row selected
+        tableView.setOnMouseClicked(e -> {
+            Author selected = tableView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                firstNameField.setText(selected.getFirstName());
+                lastNameField.setText(selected.getLastName());
+            }
+        });
+
+        stage.setTitle("AuthorsManager");
+        stage.setScene(new Scene(root, 550, 400));
+        stage.show();
+    }
+
+    private Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(
+                "jdbc:mysql://localhost:3306/books", "root", ""
+        );
+    }
+
+    private void loadAuthors() {
+        List<Author> list = new ArrayList<>();
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM Authors")) {
+
+            while (rs.next()) {
+                list.add(new Author(
+                        rs.getInt("AuthorID"),
+                        rs.getString("FirstName"),
+                        rs.getString("LastName")
+                ));
+            }
+
+            tableView.getItems().setAll(list);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void addAuthor() {
+        String first = firstNameField.getText();
+        String last = lastNameField.getText();
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "INSERT INTO Authors (FirstName, LastName) VALUES (?, ?)"
+             )) {
+
+            ps.setString(1, first);
+            ps.setString(2, last);
+            ps.executeUpdate();
+
+            firstNameField.clear();
+            lastNameField.clear();
+            loadAuthors();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updateAuthor() {
+        Author selected = tableView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE Authors SET FirstName=?, LastName=? WHERE AuthorID=?"
+             )) {
+
+            ps.setString(1, firstNameField.getText());
+            ps.setString(2, lastNameField.getText());
+            ps.setInt(3, selected.getAuthorID());
+            ps.executeUpdate();
+
+            loadAuthors();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void deleteAuthor() {
+        Author selected = tableView.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "DELETE FROM Authors WHERE AuthorID=?"
+             )) {
+
+            ps.setInt(1, selected.getAuthorID());
+            ps.executeUpdate();
+
+            loadAuthors();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
